@@ -13,6 +13,13 @@ export const DEPLOY_STEPS: StepItem[] = [
   { key: 'done', title: '完成' },
 ];
 
+export const START_STEPS: StepItem[] = [
+  { key: 'deps', title: '检查依赖' },
+  { key: 'webui', title: '检查 WebUI' },
+  { key: 'start', title: '启动实例' },
+  { key: 'done', title: '完成' },
+];
+
 export const UPGRADE_STEPS: StepItem[] = [
   { key: 'backup', title: '备份数据' },
   { key: 'extract', title: '解压文件' },
@@ -27,8 +34,16 @@ export const UPGRADE_STEPS: StepItem[] = [
 // Step Index Calculator
 // ========================================
 
-export const getDeployStepIndex = (step: DeployStep, isVersionChange: boolean): number => {
-  const steps = isVersionChange ? UPGRADE_STEPS : DEPLOY_STEPS;
+export const getDeployStepIndex = (
+  step: DeployStep,
+  deployType: 'start' | 'upgrade' | 'downgrade' | null
+): number => {
+  const steps =
+    deployType === 'start'
+      ? START_STEPS
+      : deployType === 'upgrade' || deployType === 'downgrade'
+        ? UPGRADE_STEPS
+        : DEPLOY_STEPS;
   const index = steps.findIndex((s) => s.key === step);
   if (index >= 0) return index;
 

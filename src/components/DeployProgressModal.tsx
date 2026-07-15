@@ -1,6 +1,6 @@
 import { Modal, Steps, Progress, Typography } from 'antd';
 import type { DeployProgress, DeployType } from '../types';
-import { DEPLOY_STEPS, UPGRADE_STEPS, getDeployStepIndex } from '../constants';
+import { DEPLOY_STEPS, UPGRADE_STEPS, START_STEPS, getDeployStepIndex } from '../constants';
 
 const { Text } = Typography;
 
@@ -18,11 +18,18 @@ export function DeployProgressModal({
   progress,
 }: DeployProgressModalProps) {
   const isVersionChange = deployType === 'upgrade' || deployType === 'downgrade';
-  const steps = isVersionChange ? UPGRADE_STEPS : DEPLOY_STEPS;
-  const currentStep = progress ? getDeployStepIndex(progress.step, isVersionChange) : 0;
+  const isStart = deployType === 'start';
+  const steps = isStart ? START_STEPS : isVersionChange ? UPGRADE_STEPS : DEPLOY_STEPS;
+  const currentStep = progress ? getDeployStepIndex(progress.step, deployType) : 0;
 
   const titleLabel =
-    deployType === 'downgrade' ? '降级' : deployType === 'upgrade' ? '升级' : '部署';
+    deployType === 'start'
+      ? '启动'
+      : deployType === 'downgrade'
+        ? '降级'
+        : deployType === 'upgrade'
+          ? '升级'
+          : '部署';
 
   return (
     <Modal
