@@ -9,7 +9,7 @@ use super::types::DeployProgress;
 use crate::archive::extract_zip_flat;
 use crate::component;
 use crate::config::{load_config, load_manifest, with_config_mut};
-use crate::download::download_file;
+use crate::download::{download_file, download_file_with_system_fallback};
 use crate::error::{AppError, Result};
 use crate::network_config;
 use crate::utils::paths::{get_instance_core_dir, get_instance_venv_dir, get_venv_python};
@@ -565,7 +565,7 @@ async fn ensure_webui_for_version_with_progress(
     fs::create_dir_all(&data_dir)
         .map_err(|e| AppError::io(format!("Failed to create data dir: {}", e)))?;
     let config = load_config()?;
-    let client = network_config::build_http_client_from_config(config.as_ref())?;
+    let client = network_config::build_http_client_for_download(config.as_ref())?;
     let urls = network_config::astrbot_dashboard_archive_urls(config.as_ref(), version);
     let zip_path = data_dir.join("dashboard.zip");
     let temp_dist_dir = data_dir.join(format!(".dashboard-dist-{}", uuid::Uuid::new_v4()));
@@ -580,7 +580,7 @@ async fn ensure_webui_for_version_with_progress(
         let _ = fs::remove_file(&zip_path);
         clear_dir_if_exists(&temp_dist_dir)?;
 
-        if let Err(error) = download_file(&client, url, &zip_path, None).await {
+        if let Err(error) = download_file_with_system_fallback(&client, url, &zip_path, None).await {
             log::warn!("WebUI download failed for {}: {}", url, error);
             last_error = Some(AppError::network(format!(
                 "Failed to download WebUI from {}: {}",

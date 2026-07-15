@@ -1,9 +1,11 @@
 use std::fs;
 use std::io::Write as _;
 use std::path::Path;
+use std::process::Stdio;
 
 use futures_util::StreamExt as _;
 use reqwest::Client;
+use tokio::process::Command;
 use crate::runtime::AppHandle;
 
 use crate::config::{with_manifest_mut, InstalledVersion};
@@ -187,6 +189,114 @@ async fn download_file_inner(
     }
 
     Ok(())
+}
+
+/// Download a file using reqwest, falling back to `curl` or `wget` if reqwest fails.
+///
+/// Some GitHub proxies return HTTP/2 streams that reqwest cannot decode, while
+/// `curl` handles them fine. This wrapper keeps the async reqwest path as the
+/// default and only shells out when it is missing.
+pub async fn download_file_with_system_fallback(
+    client: &Client,
+    url: &str,
+    dest: &Path,
+    opts: Option<&DownloadOptions<'_>>,
+) -> Result<()> {
+    match download_file(client, url, dest, opts).await {
+        Ok(()) => return Ok(()),
+        Err(e) => {
+            log::warn!(
+                "Reqwest download failed for {}, trying system curl/wget: {}",
+                url,
+                e
+            );
+        }
+    }
+
+    if let Some(o) = opts {
+        emit_download_progress(o, 0, None, None, "downloading", "下载器回退到系统命令");
+    }
+
+    download_with_system_command(url, dest).await
+}
+
+async fn download_with_system_command(url: &str, dest: &Path) -> Result<()> {
+    let parent = dest.parent().ok_or_else(|| {
+        AppError::io(format!("Destination {:?} has no parent directory", dest))
+    })?;
+    fs::create_dir_all(parent).map_err(|e| AppError::io(e.to_string()))?;
+
+    // Prefer curl, fall back to wget.
+    let (program, args) = if which_command("curl").await {
+        (
+            "curl",
+            vec![
+                "-L".to_string(),
+                "--max-time".to_string(),
+                "180".to_string(),
+                "--retry".to_string(),
+                "2".to_string(),
+                "-o".to_string(),
+                dest.to_string_lossy().to_string(),
+                url.to_string(),
+            ],
+        )
+    } else if which_command("wget").await {
+        (
+            "wget",
+            vec![
+                "--timeout=180".to_string(),
+                "--tries=2".to_string(),
+                "-O".to_string(),
+                dest.to_string_lossy().to_string(),
+                url.to_string(),
+            ],
+        )
+    } else {
+        return Err(AppError::network(
+            "下载失败：未找到 curl 或 wget 系统命令".to_string(),
+        ));
+    };
+
+    let output = Command::new(program)
+        .args(&args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| {
+            AppError::network(format!("运行 {} 下载失败: {}", program, e))
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::network(format!(
+            "{} 下载失败 (exit: {}): {}",
+            program,
+            output.status,
+            stderr
+        )));
+    }
+
+    if !dest.exists() || fs::metadata(dest).map(|m| m.len()).unwrap_or(0) == 0 {
+        return Err(AppError::network(format!(
+            "{} 下载后文件 {:?} 为空或不存在",
+            program, dest
+        )));
+    }
+
+    Ok(())
+}
+
+async fn which_command(name: &str) -> bool {
+    Command::new("which")
+        .arg(name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 /// Download and register an AstrBot version archive.

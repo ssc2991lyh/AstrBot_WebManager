@@ -6,7 +6,7 @@ use crate::config::AppConfig;
 use crate::error::Result;
 use crate::github::{build_api_url, build_download_url};
 use crate::utils::index_url::{normalize_default_index, wrap_with_proxy};
-use crate::utils::net::build_http_client_with_proxy;
+use crate::utils::net::{build_http_client_for_download as build_download_client, build_http_client_with_proxy};
 use crate::utils::proxy::{build_proxy_env_vars, resolve_proxy_from_config, ProxySettings};
 
 pub(crate) const MAINLAND_NPM_REGISTRY: &str = "https://npmreg.proxy.ustclug.org/";
@@ -24,6 +24,10 @@ pub(crate) fn mainland_acceleration(config: &AppConfig) -> bool {
 
 pub(crate) fn build_http_client_from_config(config: &AppConfig) -> Result<Client> {
     build_http_client_with_proxy(proxy_settings(config)?)
+}
+
+pub(crate) fn build_http_client_for_download(config: &AppConfig) -> Result<Client> {
+    build_download_client(proxy_settings(config)?)
 }
 
 pub(crate) fn proxy_settings(config: &AppConfig) -> Result<Option<ProxySettings>> {

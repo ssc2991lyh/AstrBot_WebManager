@@ -55,6 +55,53 @@ pub(crate) fn build_http_client_with_proxy(proxy: Option<ProxySettings>) -> Resu
     .map_err(|e| AppError::network(format!("创建网络客户端失败: {}", e)))
 }
 
+/// Build a download-only HTTP client: HTTP/1.1 with a longer timeout.
+/// Some GitHub proxies (e.g. gh-proxy.org) return corrupted HTTP/2 streams
+/// for large release assets, so forcing HTTP/1.1 avoids "error decoding response body".
+pub(crate) fn build_http_client_for_download(proxy: Option<ProxySettings>) -> Result<Client> {
+    let mut builder = Client::builder()
+        .timeout(Duration::from_secs(120))
+        .http1_only();
+
+    let Some(proxy) = proxy else {
+        return builder
+            .no_proxy()
+            .build()
+            .map_err(|e| AppError::network(format!("创建下载客户端失败: {}", e)));
+    };
+
+    let mut has_proxy = false;
+
+    if let Some(url) = proxy.all_proxy.as_deref() {
+        if let Some(proxy_value) = build_reqwest_proxy(Proxy::all(url), &proxy, "all")? {
+            builder = builder.proxy(proxy_value);
+            has_proxy = true;
+        }
+    }
+
+    if let Some(url) = proxy.http_proxy.as_deref() {
+        if let Some(proxy_value) = build_reqwest_proxy(Proxy::http(url), &proxy, "http")? {
+            builder = builder.proxy(proxy_value);
+            has_proxy = true;
+        }
+    }
+
+    if let Some(url) = proxy.https_proxy.as_deref() {
+        if let Some(proxy_value) = build_reqwest_proxy(Proxy::https(url), &proxy, "https")? {
+            builder = builder.proxy(proxy_value);
+            has_proxy = true;
+        }
+    }
+
+    (if has_proxy {
+        builder
+    } else {
+        builder.no_proxy()
+    })
+    .build()
+    .map_err(|e| AppError::network(format!("创建下载客户端失败: {}", e)))
+}
+
 fn build_reqwest_proxy(
     proxy_result: std::result::Result<Proxy, reqwest::Error>,
     settings: &ProxySettings,
