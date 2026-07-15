@@ -4,6 +4,20 @@ import { mockHandler } from './mock';
 // 阶段1：真后端(Rust HTTP 层)未接时走 mock；阶段3 接真后端后置 false。
 export const USE_MOCK = false;
 
+// 前端保持官方 Launcher 的 camelCase 参数风格（1:1 复刻 Tauri invoke 契约），
+// 后端 axum api_handler 统一按 snake_case 读取，故在传输层做顶层 key 转换。
+// 注意：只转换「顶层」key；嵌套对象（如 release / themePreference 的值）的字段
+// 属于协议内部约定，不应改动。
+function snakeify(obj: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!obj) return {};
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(obj)) {
+    const snake = key.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
+    out[snake] = obj[key];
+  }
+  return out;
+}
+
 // 统一传输层：Tauri invoke -> HTTP fetch('/api/<cmd>')
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (USE_MOCK) {
@@ -12,7 +26,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   const res = await fetch('/api/' + cmd, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(args ?? {}),
+    body: JSON.stringify(snakeify(args ?? {})),
   });
   if (!res.ok) {
     const text = await res.text();
