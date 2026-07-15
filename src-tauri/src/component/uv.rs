@@ -1,0 +1,205 @@
+use std::path::PathBuf;
+
+use reqwest::Client;
+use crate::runtime::AppHandle;
+use tokio::process::Command;
+
+use super::common::install_from_archive_with_progress;
+use crate::archive::ArchiveFormat;
+use crate::config::{load_config, AppConfig};
+use crate::error::{AppError, Result};
+use crate::network_config;
+use crate::platform::get_uv_archive_name;
+use crate::utils::paths::{get_component_dir, get_uv_cache_dir, get_uv_exe_path, get_uvx_exe_path};
+
+pub fn is_uv_installed() -> bool {
+    let uv_dir = get_component_dir("uv");
+    let uv_exe = get_uv_exe_path(&uv_dir);
+    let uvx_exe = get_uvx_exe_path(&uv_dir);
+    uv_exe.exists() && uvx_exe.exists()
+}
+
+pub fn get_uv_executable() -> Result<PathBuf> {
+    let uv_dir = get_component_dir("uv");
+    let uv_exe = get_uv_exe_path(&uv_dir);
+    if uv_exe.exists() {
+        Ok(uv_exe)
+    } else {
+        Err(AppError::other("uv 组件未安装"))
+    }
+}
+
+pub async fn uv_sync(
+    venv_python: &std::path::Path,
+    venv_dir: &std::path::Path,
+    core_dir: &std::path::Path,
+    config: &AppConfig,
+) -> Result<()> {
+    let uv_exe = get_uv_executable()?;
+
+    let cache_dir = get_uv_cache_dir();
+    std::fs::create_dir_all(&cache_dir)
+        .map_err(|e| AppError::io(format!("Failed to create uv cache dir: {}", e)))?;
+
+    let default_index = network_config::default_index(config);
+    let new_path = crate::component::build_instance_path(venv_python, config.ignore_external_path)?;
+    let proxy_env_vars = match network_config::proxy_env_vars(config) {
+        Ok(vars) => vars,
+        Err(e) => {
+            log::warn!(
+                "Failed to prepare proxy env for uv sync, fallback to no proxy: {}",
+                e
+            );
+            Vec::new()
+        }
+    };
+
+    let mut cmd = Command::new(&uv_exe);
+    cmd.arg("sync")
+        .arg("-qq")
+        .arg("--active")
+        .arg("--no-managed-python")
+        .arg("--no-python-downloads")
+        .arg("--inexact")
+        .arg("--python")
+        .arg(venv_python)
+        .arg("--cache-dir")
+        .arg(&cache_dir)
+        .arg("--default-index")
+        .arg(default_index)
+        .current_dir(core_dir)
+        .env("PATH", new_path)
+        .env("VIRTUAL_ENV", venv_dir)
+        .env_remove("PYTHONHOME");
+    crate::utils::proxy::apply_proxy_env(&mut cmd, &proxy_env_vars);
+
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+        cmd.creation_flags(CREATE_NO_WINDOW.0);
+    }
+
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| AppError::python(format!("Failed to run uv sync: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::python(format!("uv sync failed: {}", stderr)));
+    }
+
+    Ok(())
+}
+
+pub async fn install_uv(client: &Client, app_handle: Option<&AppHandle>) -> Result<String> {
+    if is_uv_installed() {
+        return Ok("uv 已安装".to_string());
+    }
+    let version = do_install_uv(client, app_handle).await?;
+    Ok(format!("已安装 uv: {}", version))
+}
+
+/// Uninstall uv.
+pub fn uninstall_uv() -> Result<String> {
+    let dir = get_component_dir("uv");
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir)
+            .map_err(|e| AppError::io(format!("Failed to remove uv: {}", e)))?;
+        Ok("已卸载 uv".to_string())
+    } else {
+        Ok("uv 组件未安装".to_string())
+    }
+}
+
+pub async fn reinstall_uv(client: &Client, app_handle: Option<&AppHandle>) -> Result<String> {
+    let version = do_install_uv(client, app_handle).await?;
+    Ok(format!("已重新安装 uv: {}", version))
+}
+
+async fn detect_installed_uv_version(uv_exe: &std::path::Path) -> String {
+    let mut cmd = Command::new(uv_exe);
+    cmd.arg("--version");
+
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+        cmd.creation_flags(CREATE_NO_WINDOW.0);
+    }
+
+    match cmd.output().await {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let version = stdout.trim();
+            if version.is_empty() {
+                "latest".to_string()
+            } else {
+                version
+                    .strip_prefix("uv ")
+                    .unwrap_or(version)
+                    .trim()
+                    .to_string()
+            }
+        }
+        Ok(output) => {
+            log::warn!(
+                "Failed to detect installed uv version, exit status: {}",
+                output.status
+            );
+            "latest".to_string()
+        }
+        Err(e) => {
+            log::warn!("Failed to run uv --version after install: {}", e);
+            "latest".to_string()
+        }
+    }
+}
+
+async fn do_install_uv(client: &Client, app_handle: Option<&AppHandle>) -> Result<String> {
+    let target_dir = get_component_dir("uv");
+
+    let archive_name =
+        get_uv_archive_name().map_err(|e| AppError::io(format!("Unsupported platform: {}", e)))?;
+    let download_url = match load_config() {
+        Ok(config) => network_config::build_uv_download_url(config.as_ref(), archive_name),
+        Err(_) => format!(
+            "https://github.com/astral-sh/uv/releases/latest/download/{}",
+            archive_name
+        ),
+    };
+
+    let archive_path = target_dir.join(archive_name);
+    let archive_format = if archive_name.ends_with(".zip") {
+        ArchiveFormat::Zip
+    } else {
+        ArchiveFormat::TarGz
+    };
+    install_from_archive_with_progress(
+        client,
+        &download_url,
+        &target_dir,
+        &archive_path,
+        archive_format,
+        "uv",
+        app_handle,
+    )
+    .await?;
+
+    let uv_exe = get_uv_exe_path(&target_dir);
+    if !uv_exe.exists() {
+        return Err(AppError::io(format!(
+            "uv extracted but executable not found: {:?}",
+            uv_exe
+        )));
+    }
+
+    let uvx_exe = get_uvx_exe_path(&target_dir);
+    if !uvx_exe.exists() {
+        return Err(AppError::io(format!(
+            "uv extracted but uvx executable not found: {:?}",
+            uvx_exe
+        )));
+    }
+
+    Ok(detect_installed_uv_version(&uv_exe).await)
+}
