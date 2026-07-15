@@ -1,4 +1,4 @@
-import paramiko, os
+import io, os, paramiko
 
 HOST = os.environ.get('SSH_HOST', '192.168.10.107')
 USER = os.environ.get('SSH_USER', 'mulq')
@@ -35,18 +35,20 @@ client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 client.connect(HOST, username=USER, password=PASS, timeout=30)
 
-# Write config via sudo tee
-cmd = f"echo {PASS} | sudo -S tee /etc/nginx/sites-available/astrbot-web > /dev/null"
-stdin, stdout, stderr = client.exec_command(cmd)
-stdin.write(NGINX_CONF)
-stdin.channel.shutdown_write()
-print('write:', stdout.read().decode().strip(), stderr.read().decode().strip())
+# 用 SFTP 把配置写到 /tmp（mulq 可写），再 sudo mv 到目标（修复之前的 tee bug）
+sftp = client.open_sftp()
+tmp = '/tmp/astrbot-web.nginx'
+with sftp.open(tmp, 'w') as f:
+    f.write(NGINX_CONF)
+sftp.close()
+print('sftp write:', tmp, 'ok')
 
-# Test config
+i, o, e = client.exec_command(f"echo {PASS} | sudo -S mv -f {tmp} /etc/nginx/sites-available/astrbot-web", timeout=30)
+print('mv:', o.read().decode().strip(), e.read().decode().strip())
+
 i, o, e = client.exec_command(f"echo {PASS} | sudo -S nginx -t", timeout=30)
 print('nginx -t:', o.read().decode().strip(), e.read().decode().strip())
 
-# Reload
 i, o, e = client.exec_command(f"echo {PASS} | sudo -S systemctl reload nginx", timeout=30)
 print('reload:', o.read().decode().strip(), e.read().decode().strip())
 
