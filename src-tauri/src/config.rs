@@ -17,7 +17,9 @@ fn default_true() -> bool {
     true
 }
 
-pub const DEFAULT_INSTANCE_HOST: &str = "127.0.0.1";
+// Bind dashboard to all interfaces so instances are reachable from the LAN
+// (this is a headless server deployment; AstrBot itself handles auth).
+pub const DEFAULT_INSTANCE_HOST: &str = "0.0.0.0";
 
 fn default_instance_host() -> String {
     DEFAULT_INSTANCE_HOST.to_string()

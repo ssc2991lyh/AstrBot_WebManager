@@ -65,6 +65,10 @@ pub(super) fn normalize_instance_host(host: &str) -> String {
     let host = host.trim();
     if host.is_empty() {
         DEFAULT_INSTANCE_HOST.to_string()
+    } else if host == "127.0.0.1" || host.eq_ignore_ascii_case("localhost") {
+        // Loopback-only would make the instance unreachable from the LAN.
+        // Normalize to all-interfaces for headless server deployments.
+        DEFAULT_INSTANCE_HOST.to_string()
     } else {
         host.to_string()
     }

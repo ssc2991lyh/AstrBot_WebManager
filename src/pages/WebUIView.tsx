@@ -75,11 +75,11 @@ export default function WebUIView() {
           返回
         </Button>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          http://localhost:{port}
+          http://{window.location.hostname}:{port}
         </Typography.Text>
       </div>
       <iframe
-        src={`http://localhost:${port}`}
+        src={`http://${window.location.hostname}:${port}`}
         style={{
           flex: 1,
           minHeight: 0,
