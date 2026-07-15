@@ -13,6 +13,7 @@ import type {
   ThemePreference,
 } from '../types';
 import { handleApiError } from '../utils';
+import { MODAL_CLOSE_DELAY_MS } from '../constants';
 
 interface AppState {
   // Data
@@ -275,11 +276,45 @@ export const useAppStore = create<AppState>((set, get) => {
   };
 });
 
-// 事件通道：Tauri listen -> 阶段2 用 WebSocket/SSE 替代。阶段0(Mock) 先 no-op。
-export async function initEventListeners() {
-  // TODO(阶段2): 建立 WebSocket，订阅 app-snapshot / deploy-progress / download-progress / log-entry
+// 事件通道：阶段2 用 SSE 订阅 app-snapshot / deploy-progress / log-entry。
+// 后端 /api/events 为 broadcast 流，事件名即 event 字段，data 为 JSON 载荷。
+let eventSource: EventSource | null = null;
+
+export function initEventListeners() {
+  if (eventSource || typeof EventSource === 'undefined') return;
+  const es = new EventSource('/api/events');
+  eventSource = es;
+
+  es.addEventListener('deploy-progress', (ev) => {
+    try {
+      const progress = JSON.parse((ev as MessageEvent).data) as DeployProgress;
+      const store = useAppStore.getState();
+      store.setDeployProgress(progress);
+      if (progress.step === 'done' || progress.step === 'error') {
+        window.setTimeout(() => useAppStore.getState().closeDeploy(), MODAL_CLOSE_DELAY_MS);
+      }
+    } catch {
+      /* ignore malformed payload */
+    }
+  });
+
+  es.addEventListener('app-snapshot', (ev) => {
+    try {
+      const snapshot = JSON.parse((ev as MessageEvent).data) as AppSnapshot;
+      useAppStore.getState().hydrateSnapshot(snapshot);
+    } catch {
+      /* ignore malformed payload */
+    }
+  });
+
+  es.onerror = () => {
+    // EventSource 内置自动重连；此处仅防止未捕获异常冒泡。
+  };
 }
 
 export function cleanupEventListeners() {
-  // TODO(阶段2): 关闭 WebSocket
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
 }
