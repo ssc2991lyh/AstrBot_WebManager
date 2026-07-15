@@ -130,8 +130,9 @@ fn scan_instances() -> Result<HashMap<String, InstanceConfig>> {
             continue;
         };
 
+        let name = resolve_instance_name(&instance_dir, &instance_id);
         let instance = InstanceConfig {
-            name: default_instance_name(&instance_id),
+            name,
             version,
             host: DEFAULT_INSTANCE_HOST.to_string(),
             port: 0,
@@ -179,7 +180,48 @@ fn read_pyproject_version(instance_dir: &Path) -> Option<String> {
     }
 }
 
-fn default_instance_name(instance_id: &str) -> String {
+fn resolve_instance_name(instance_dir: &Path, instance_id: &str) -> String {
+    // 1) 优先读取实例元数据中的自定义名称（用户可持久化/迁移时写入）
+    if let Some(name) = read_instance_json_name(instance_dir) {
+        return name;
+    }
+
+    // 2) 尝试从 AstrBot 配置中读取显式 name 字段
+    let config_paths = [
+        instance_dir.join("core").join("data").join("cmd_config.json"),
+        instance_dir.join("data").join("cmd_config.json"),
+    ];
+    for path in &config_paths {
+        if let Some(name) = read_cmd_config_name(path) {
+            return name;
+        }
+    }
+
+    // 3) 没有可识别名称时，回退到简短 UUID 提示
     let short_id: String = instance_id.chars().take(8).collect();
     format!("Rev {}", short_id)
 }
+
+fn read_instance_json_name(instance_dir: &Path) -> Option<String> {
+    let path = instance_dir.join(".instance.json");
+    let content = fs::read_to_string(&path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let name = value.get("name")?.as_str()?.trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some(name.to_string())
+}
+
+fn read_cmd_config_name(path: &Path) -> Option<String> {
+    let content = fs::read_to_string(path).ok()?;
+    // 兼容 UTF-8 BOM
+    let content = content.trim_start_matches('\u{FEFF}');
+    let value: serde_json::Value = serde_json::from_str(content).ok()?;
+    let name = value.get("name")?.as_str()?.trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some(name.to_string())
+}
+
