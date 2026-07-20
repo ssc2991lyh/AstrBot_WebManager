@@ -19,8 +19,6 @@ export const OPERATION_KEYS = {
   advancedSavePypiMirror: 'adv:save-pypi-mirror',
   advancedSaveNodejsMirror: 'adv:save-nodejs-mirror',
   advancedSaveNpmRegistry: 'adv:save-npm-registry',
-  advancedSaveCloseToTray: 'adv:save-close-to-tray',
-  advancedSaveAutostartMinimizeToTray: 'adv:save-autostart-minimize-to-tray',
   advancedSaveCheckInstanceUpdate: 'adv:save-check-instance-update',
   advancedSavePersistInstanceState: 'adv:save-persist-instance-state',
   advancedSaveIgnoreExternalPath: 'adv:save-ignore-external-path',

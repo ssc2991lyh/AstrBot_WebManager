@@ -1,6 +1,13 @@
 import type { GitHubRelease, AppSnapshot, ThemePreference, RepairPreserveScope } from './types';
 import { mockHandler } from './mock';
 
+export interface FileItem {
+  name: string;
+  is_dir: boolean;
+  size: number;
+  modified?: number;
+}
+
 // 阶段1：真后端(Rust HTTP 层)未接时走 mock；阶段3 接真后端后置 false。
 export const USE_MOCK = false;
 
@@ -16,6 +23,22 @@ function snakeify(obj: Record<string, unknown> | undefined): Record<string, unkn
     out[snake] = obj[key];
   }
   return out;
+}
+
+// 文件管理走独立 axum 路由（二进制/流式），不进 /api/{cmd} JSON dispatch。
+async function fget<T = any>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+  return (await res.json()) as T;
+}
+async function fpost<T = any>(url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+  return (await res.json()) as T;
 }
 
 // 统一传输层：Tauri invoke -> HTTP fetch('/api/<cmd>')
@@ -70,9 +93,6 @@ export const api = {
   saveNpmRegistry: (npmRegistry: string) => call<void>('save_npm_registry', { npmRegistry }),
   saveUseUvForDeps: (useUvForDeps: boolean) =>
     call<void>('save_use_uv_for_deps', { useUvForDeps }),
-  saveCloseToTray: (closeToTray: boolean) => call<void>('save_close_to_tray', { closeToTray }),
-  saveAutostartMinimizeToTray: (autostartMinimizeToTray: boolean) =>
-    call<void>('save_autostart_minimize_to_tray', { autostartMinimizeToTray }),
   compareVersions: (a: string, b: string) => call<number>('compare_versions', { a, b }),
   saveCheckInstanceUpdate: (checkInstanceUpdate: boolean) =>
     call<void>('save_check_instance_update', { checkInstanceUpdate }),
@@ -173,4 +193,51 @@ export const api = {
   createBackup: (instanceId: string) => call<string>('create_backup', { instanceId }),
   restoreBackup: (backupPath: string) => call<void>('restore_backup', { backupPath }),
   deleteBackup: (backupPath: string) => call<void>('delete_backup', { backupPath }),
+
+  // ========================================
+  // File Manager (instance core/ directory)
+  // ========================================
+  files: {
+    lists: (id: string, path = '') =>
+      fget<{ path: string; items: FileItem[] }>(
+        `/api/files/instance/${id}/lists?path=${encodeURIComponent(path)}`
+      ),
+    content: (id: string, path: string) =>
+      fget<{ path: string; content: string }>(
+        `/api/files/instance/${id}/content?path=${encodeURIComponent(path)}`
+      ),
+    write: (id: string, path: string, content: string) =>
+      fpost(`/api/files/instance/${id}/content`, { path, content }),
+    mkdir: (id: string, path: string) =>
+      fpost(`/api/files/instance/${id}/directory`, { path }),
+    rename: (id: string, old_path: string, new_path: string) =>
+      fpost(`/api/files/instance/${id}/rename`, { old_path, new_path }),
+    remove: (id: string, paths: string[]) =>
+      fpost(`/api/files/instance/${id}/delete`, { paths }),
+    copy: (id: string, sources: string[], dest_dir: string) =>
+      fpost(`/api/files/instance/${id}/copy`, { sources, dest_dir }),
+    move: (id: string, sources: string[], dest_dir: string) =>
+      fpost(`/api/files/instance/${id}/move`, { sources, dest_dir }),
+    chmod: (id: string, path: string, mode: number) =>
+      fpost(`/api/files/instance/${id}/chmod`, { path, mode }),
+    downloadUrl: (id: string, path: string) =>
+      `/api/files/instance/${id}/download?path=${encodeURIComponent(path)}`,
+    uploadInit: (id: string, dir: string, name: string) =>
+      fpost<{ upload_id: string }>(`/api/files/instance/${id}/upload/init`, { dir, name }),
+    uploadChunk: async (id: string, upload_id: string, bytes: Uint8Array) => {
+      const res = await fetch(`/api/files/instance/${id}/upload/chunk/${upload_id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: bytes,
+      });
+      if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+      return (await res.json()) as { ok: boolean };
+    },
+    uploadFinish: (id: string, upload_id: string) =>
+      fpost(`/api/files/instance/${id}/upload/finish/${upload_id}`),
+    compress: (id: string, sources: string[], dest: string) =>
+      fpost(`/api/files/instance/${id}/compress`, { sources, dest }),
+    decompress: (id: string, path: string, dest_dir: string) =>
+      fpost(`/api/files/instance/${id}/decompress`, { path, dest_dir }),
+  },
 };

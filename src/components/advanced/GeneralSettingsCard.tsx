@@ -9,12 +9,9 @@ interface GeneralSettingsCardProps {
   mainlandAccelerationSaving: boolean;
   lockCheckExtensionWhitelistSaving: boolean;
   themePreferenceSaving: boolean;
-  autostartMinimizeToTraySaving: boolean;
-  onCloseToTrayChange: (value: string) => void;
   onCheckInstanceUpdateChange: (checked: boolean) => void;
   onPersistInstanceStateChange: (checked: boolean) => void;
   onAutostartChange: (checked: boolean) => void;
-  onAutostartMinimizeToTrayChange: (checked: boolean) => void;
   onUseUvForDepsChange: (checked: boolean) => void;
   onMainlandAccelerationChange: (checked: boolean) => void;
   onLockCheckExtensionWhitelistChange: (checked: boolean) => void;
@@ -29,12 +26,9 @@ export function GeneralSettingsCard({
   mainlandAccelerationSaving,
   lockCheckExtensionWhitelistSaving,
   themePreferenceSaving,
-  autostartMinimizeToTraySaving,
-  onCloseToTrayChange,
   onCheckInstanceUpdateChange,
   onPersistInstanceStateChange,
   onAutostartChange,
-  onAutostartMinimizeToTrayChange,
   onUseUvForDepsChange,
   onMainlandAccelerationChange,
   onLockCheckExtensionWhitelistChange,
@@ -57,17 +51,6 @@ export function GeneralSettingsCard({
             style={{ width: 200 }}
           />
         </Form.Item>
-        <Form.Item label="关闭窗口时" extra="选择关闭窗口按钮的行为">
-          <Select
-            value={config?.close_to_tray ? 'tray' : 'exit'}
-            onChange={onCloseToTrayChange}
-            options={[
-              { label: '最小化到系统托盘', value: 'tray' },
-              { label: '直接退出', value: 'exit' },
-            ]}
-            style={{ width: 200 }}
-          />
-        </Form.Item>
         <Form.Item label="实例版本更新检查" extra="启用后在面板中提示可用的版本更新">
           <Switch
             checked={config?.check_instance_update ?? true}
@@ -85,17 +68,6 @@ export function GeneralSettingsCard({
         </Form.Item>
         <Form.Item label="开机自启动" extra="开启后系统启动时自动运行 AstrBot Launcher">
           <Switch checked={autostart} onChange={onAutostartChange} />
-        </Form.Item>
-        <Form.Item
-          label="自启动后最小化到托盘"
-          extra="开启后通过开机自启动启动时不显示主窗口，直接在系统托盘后台运行"
-        >
-          <Switch
-            checked={config?.autostart_minimize_to_tray ?? false}
-            onChange={onAutostartMinimizeToTrayChange}
-            disabled={!autostart}
-            loading={autostartMinimizeToTraySaving}
-          />
         </Form.Item>
         <Form.Item
           label="中国大陆一键加速"

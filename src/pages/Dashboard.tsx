@@ -383,7 +383,7 @@ export default function Dashboard() {
   }, [instanceToDelete, runOperation]);
 
   const handleOpen = useCallback(
-    (instance: InstanceStatus) => {
+    async (instance: InstanceStatus) => {
       if (instance.state !== 'running') {
         message.warning('实例未启动完成');
         return;
@@ -392,24 +392,28 @@ export default function Dashboard() {
         message.warning('Dashboard 已禁用');
         return;
       }
-      navigate(`/webui/${instance.id}`);
+      try {
+        const port = await api.getInstancePort(instance.id);
+        const url = `http://${window.location.hostname}:${port}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } catch (error) {
+        handleApiError(error, '获取实例端口失败');
+      }
     },
-    [navigate]
+    []
   );
 
-  const handleOpenCoreFolder = useCallback(async (instance: InstanceStatus) => {
-    const { instances: latestInstances } = useAppStore.getState();
-    if (!latestInstances.some((i) => i.id === instance.id)) {
-      message.info('实例不存在或已被删除');
-      return;
-    }
-
-    try {
-      await api.openInstanceCoreFolder(instance.id);
-    } catch (error) {
-      handleApiError(error, '打开 core 文件夹失败');
-    }
-  }, []);
+  const handleOpenCoreFolder = useCallback(
+    (instance: InstanceStatus) => {
+      const { instances: latestInstances } = useAppStore.getState();
+      if (!latestInstances.some((i) => i.id === instance.id)) {
+        message.info('实例不存在或已被删除');
+        return;
+      }
+      navigate(`/instance/${instance.id}/files`);
+    },
+    [navigate, message]
+  );
 
   const openEditModal = useCallback((instance: InstanceStatus) => {
     setEditingInstance(instance);

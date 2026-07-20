@@ -153,14 +153,6 @@ export default function Advanced() {
   const nodejsMirrorCanSave = nodejsMirrorDirty && !nodejsMirrorError && !nodejsMirrorSaving;
   const npmRegistryCanSave = npmRegistryDirty && !npmRegistryError && !npmRegistrySaving;
 
-  const handleCloseToTrayChange = async (value: string) => {
-    await handleSaveSetting({
-      key: OPERATION_KEYS.advancedSaveCloseToTray,
-      save: () => api.saveCloseToTray(value === 'tray'),
-      successMessage: '设置已保存',
-    });
-  };
-
   const handleCheckInstanceUpdateChange = async (checked: boolean) => {
     await handleSaveSetting({
       key: OPERATION_KEYS.advancedSaveCheckInstanceUpdate,
@@ -196,14 +188,6 @@ export default function Advanced() {
         setAutostart(checked);
         message.success('设置已保存');
       },
-    });
-  };
-
-  const handleAutostartMinimizeToTrayChange = async (checked: boolean) => {
-    await handleSaveSetting({
-      key: OPERATION_KEYS.advancedSaveAutostartMinimizeToTray,
-      save: () => api.saveAutostartMinimizeToTray(checked),
-      successMessage: '设置已保存',
     });
   };
 
@@ -547,8 +531,6 @@ export default function Advanced() {
   const lockCheckExtensionWhitelistSaving =
     operations[OPERATION_KEYS.advancedSaveLockCheckExtensionWhitelist] || false;
   const themePreferenceSaving = operations[OPERATION_KEYS.advancedSaveThemePreference] || false;
-  const autostartMinimizeToTraySaving =
-    operations[OPERATION_KEYS.advancedSaveAutostartMinimizeToTray] || false;
   const lockCheckModalLoading =
     lockCheckModal?.mode === 'checkFailed'
       ? operations[lockCheckModal.payload.operationKey] || false
@@ -622,12 +604,9 @@ export default function Advanced() {
         mainlandAccelerationSaving={mainlandAccelerationSaving}
         lockCheckExtensionWhitelistSaving={lockCheckExtensionWhitelistSaving}
         themePreferenceSaving={themePreferenceSaving}
-        autostartMinimizeToTraySaving={autostartMinimizeToTraySaving}
-        onCloseToTrayChange={handleCloseToTrayChange}
         onCheckInstanceUpdateChange={handleCheckInstanceUpdateChange}
         onPersistInstanceStateChange={handlePersistInstanceStateChange}
         onAutostartChange={handleAutostartChange}
-        onAutostartMinimizeToTrayChange={handleAutostartMinimizeToTrayChange}
         onUseUvForDepsChange={handleUseUvForDepsChange}
         onMainlandAccelerationChange={handleMainlandAccelerationChange}
         onLockCheckExtensionWhitelistChange={handleLockCheckExtensionWhitelistChange}

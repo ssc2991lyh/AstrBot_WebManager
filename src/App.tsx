@@ -16,6 +16,7 @@ import {
   FileTextOutlined,
   ToolOutlined,
   InfoCircleOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TitleBar } from './components/TitleBar';
@@ -29,6 +30,8 @@ const Logs = lazy(() => import('./pages/Logs'));
 const Advanced = lazy(() => import('./pages/Advanced'));
 const About = lazy(() => import('./pages/About'));
 const WebUIView = lazy(() => import('./pages/WebUIView'));
+const FileManager = lazy(() => import('./pages/FileManager'));
+const ConnectQQ = lazy(() => import('./pages/ConnectQQ'));
 import './App.css';
 
 const { Sider, Content } = Layout;
@@ -59,6 +62,11 @@ function AppLayout() {
         key: '/',
         icon: <DesktopOutlined />,
         label: '实例',
+      },
+      {
+        key: '/connectqq',
+        icon: <MessageOutlined />,
+        label: '连接QQ',
       },
       {
         key: '/versions',
@@ -139,6 +147,8 @@ function AppLayout() {
                 <Route path="/logs" element={<Logs />} />
                 <Route path="/advanced" element={<Advanced />} />
                 <Route path="/about" element={<About />} />
+                <Route path="/connectqq" element={<ConnectQQ />} />
+                <Route path="/instance/:instanceId/files" element={<FileManager />} />
               </Routes>
             </ErrorBoundary>
           </Content>

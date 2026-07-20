@@ -14,6 +14,7 @@ import type {
 } from '../types';
 import { handleApiError } from '../utils';
 import { MODAL_CLOSE_DELAY_MS } from '../constants';
+import { useLogStore } from './useLogStore';
 
 interface AppState {
   // Data
@@ -302,6 +303,16 @@ export function initEventListeners() {
     try {
       const snapshot = JSON.parse((ev as MessageEvent).data) as AppSnapshot;
       useAppStore.getState().hydrateSnapshot(snapshot);
+    } catch {
+      /* ignore malformed payload */
+    }
+  });
+
+  // log-entry：运行实例 stdout / 系统日志实时尾随（镜像官方 Launcher 的 listen('log-entry')）
+  es.addEventListener('log-entry', (ev) => {
+    try {
+      const entry = JSON.parse((ev as MessageEvent).data);
+      useLogStore.getState().addLogEntry(entry);
     } catch {
       /* ignore malformed payload */
     }

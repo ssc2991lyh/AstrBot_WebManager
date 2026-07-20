@@ -1,19 +1,18 @@
 [Unit]
-Description=AstrBot Launcher Web Manager (Rust HTTP backend)
-Documentation=https://github.com/AstrBotDevs/astrbot-launcher
+Description=AstrBot Web Manager (Rust HTTP backend)
+Documentation=https://github.com/ssc2991lyh/AstrBot_WebManager
 After=network.target
 
 [Service]
 Type=simple
-User=mulq
-Group=mulq
-WorkingDirectory=/opt/astrbot-launcher
-ExecStart=/opt/astrbot-launcher/bin/astrbot_launcher
-# 监听端口（代码默认 6190，可被 ASTRBOT_HTTP_PORT 覆盖）
+User=astrbot
+Group=astrbot
+# 系统用户无家目录，dirs crate 需要 HOME 才能解析数据目录，这里显式指定
+WorkingDirectory=/var/lib/astrbot-launcher
 Environment=ASTRBOT_HTTP_PORT=6190
-# 数据目录：默认走 dirs crate（~/.local/share/astrbot-launcher）。
-# 若需接管现有 /home/mulq/astrbot_launcher，待代码支持自定义 base-dir env 后再加 Environment。
-# restart/stop_manager 走 systemd（见 commands.rs），Restart=on-failure 仅在进程异常退出时拉起。
+Environment=HOME=/var/lib/astrbot-launcher
+# restart/stop_manager 走 systemd（见 commands.rs），Restart=on-failure 仅在进程异常退出时拉起
+ExecStart=/usr/local/bin/astrbot-launcher
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=30

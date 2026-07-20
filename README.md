@@ -2,143 +2,136 @@
 
 # AstrBot Web Manager
 
-> 将 [AstrBot Launcher](https://github.com/AstrBot-org/AstrBot-Launcher) 的 React 前端从 Tauri 桌面壳**解耦为纯网页端**的版本。Rust 后端用 [axum](https://github.com/tokio-rs/axum) 提供 HTTP API，可在浏览器中管理 AstrBot 实例（版本下载、实例管理、数据备份、运行环境配置），**无需桌面环境**。
+> 把 [AstrBot Launcher](https://github.com/AstrBotDevs/AstrBot-Launcher) 的 React 前端从 Tauri 桌面壳里**解放出来**，做成一套能在浏览器里跑、部署在无图形界面的服务器上的实例管理器。后端用 Rust + [axum](https://github.com/tokio-rs/axum) 暴露 HTTP API（默认 `:6190`），所有命令、日志、文件操作都走 HTTP，不再依赖桌面环境。
 
-**License:** [AGPL-3.0](./LICENSE) · 源码见 [GitHub](https://github.com/ssc2991lyh/AstrBot_WebManager)。根据 AGPL §13，若你将该服务部署到网络供他人使用，需向用户提供对应源码。
+**License:** [AGPL-3.0](./LICENSE) · 源码见 [GitHub](https://github.com/ssc2991lyh/AstrBot_WebManager)。按 AGPL §13，如果你把本服务架到公网给别人用，需要向用户提供对应源码。
 
 ---
 
-AstrBot Web Manager 是一款用于图形化管理 AstrBot 的 Web 应用程序，提供版本下载、实例管理、数据备份以及 Python 运行环境自动化配置等完整功能支持。
+## 它是什么 / 不是什么
+
+- **是**：一个 headless（无界面、无窗口、无托盘）的 AstrBot 多实例管理面板。在一台 Linux 服务器上起一个后端进程，浏览器打开就能管理实例的创建、启停、升级、备份、日志、文件。
+- **不是**：官方 AstrBot Launcher 桌面客户端。官方版是 Tauri 套壳的原生应用，本仓库是它的**网页化分支**——前端代码同源，但运行时彻底去掉了 Tauri，命令全部改为 HTTP 调用。
+- 本项目与另一套基于 Node.js 的 Web Manager（`:6180`）是相互独立的两条技术路线，本仓库只涵盖 Rust + axum 这一套。
 
 ## 功能特性
 
-- 零侵入架构设计：运行环境与依赖统一在独立目录管理，避免污染系统
-- 多实例可视化管理：创建/启动/停止/升级一站式完成
-- 安全备份恢复：实例级备份与恢复，数据更安心
-- 运行时隔离：实例独立运行，杜绝环境冲突
-- 桌面友好集成：托盘驻留、开机自启即装即用
+- **多实例管理**：创建 / 启动 / 停止 / 重启 / 删除实例，查看运行状态与端口，编辑实例名、版本、监听地址。
+- **版本管理**：从 GitHub Releases 拉取 AstrBot 与 Launcher 的可用版本，一键安装 / 卸载 / 升级。
+- **组件管理**：安装、重装、卸载运行时组件（如 Node.js、Python 工具链等）。
+- **备份与恢复**：按实例创建备份、列出备份、恢复、删除。
+- **日志**：实时日志流（通过 SSE 推送），可查看系统日志与实例输出。
+- **文件管理（移植自 MSLX）**：直接浏览和编辑实例目录下的文件——列目录、读写文本、新建目录、重命名、复制、移动、删除、改权限（chmod）、压缩 / 解压、分片上传、下载。路径被严格限制在实例目录内，禁止跨目录穿越。
+- **高级设置**：代理、PyPI / npm / Node.js 镜像源、GitHub 代理、UV 依赖开关、中国大陆一键加速、开机自启（systemd）、主题偏好等。
+- **关于页**：版本信息、发布说明、许可证。
 
-## 平台支持级别
-
-| 操作系统 | 支持级别 | 说明 |
-| :--- | :--- | :--- |
-| Windows | 主要支持 | 主力开发与测试平台，功能完整，优先修复问题 |
-| Linux | 尽力而为 | 提供可用支持，但不同桌面环境存在兼容性差异 |
-| macOS | 理论上可工作 | 代码设计上兼容，但当前缺少充分实机验证 |
-
-## WebUI 监听地址说明
-
-v0.3.4 及后继版本中，实例默认监听 `127.0.0.1`（IPv4 本地回环），即仅本机可访问，以保障安全性。
-
-如需修改 WebUI 监听地址，在实例管理页面点击实例的齿轮图标可打开编辑实例弹窗：
-
-![Edit Instance](https://pic1.imgdb.cn/item/69fd61d4353cb83ac762f37c.png)
-
-| 选项 | 值 | 说明 |
-| :--- | :--- | :--- |
-| IPv4 本地回环 | `127.0.0.1` | **默认。** 仅本机可访问，安全性最高。 |
-| IPv6 本地回环 | `::1` | IPv4 本地回环的 IPv6 等效选项。 |
-| 所有 IPv4 地址 | `0.0.0.0` | 监听所有 IPv4 网卡，其他设备可通过本机 IP 访问 WebUI。适用于需要通过手机、平板或其他电脑访问 WebUI 的场景。 |
-| 所有 IPv6 地址 | `::` | 所有 IPv4 地址的 IPv6 等效选项。 |
-| 自定义地址 | 自定义 | 手动输入指定的 IP 地址或主机名进行绑定。 |
-
-## 关于 Windows ARM 设备的兼容性说明
-
-在Windows ARM设备上，启动器会统一使用x86_64版本的Python运行时（通过系统仿真层运行），以确保与现有AstrBot版本的兼容性。
-
-## FAQ
-
-如果遇到以下问题，可以按照对应步骤进行故障排除。
-
-> [!important]
-> 请确保已升级到最新版本。
-
-### 下载太慢/网络错误
-
-请点击软件页面最左边的“高级”并按需配置代理或源。如果对“代理”、“源”等概念感到陌生，打开“中国大陆一键加速”通常能够解决绝大部分问题。
-
-![Mainland Acceleration](https://pic1.imgdb.cn/item/69b276c8cda91d5fbafff6d8.png)
-
-### DLL加载失败（常见于Windows ARM64）
+## 架构
 
 ```text
-ValueError: the greenlet library is required to use this function.
-DLL load failed while importing _greenlet: The specified module could not be found.
+┌──────────────┐      HTTP /api/* + SSE       ┌──────────────────────┐
+│  浏览器前端   │ ───────────────────────────▶ │  Rust + axum 后端     │
+│ React+Vite   │                              │  (headless, :6190)   │
+│ 静态文件托管  │ ◀─────────────────────────── │                      │
+└──────────────┘      JSON 响应 / 事件流        └──────────┬───────────┘
+                                                           │ 启动/停止/读写
+                                                           ▼
+                                                  ┌────────────────────┐
+                                                  │  AstrBot 实例进程    │
+                                                  │  (core/main.py 等)  │
+                                                  └────────────────────┘
 ```
 
-**解决方案：**
-
-> [!note]
-> Windows ARM64也是安装下面的运行库，因为它同时包含了ARM64和X64二进制文件。
-
-请下载安装Microsoft Visual C++ Redistributable：
-
-点此链接下载： [https://aka.ms/vc14/vc_redist.x64.exe](https://aka.ms/vc14/vc_redist.x64.exe)
-
-### 依赖同步失败
-
-```text
-uv sync failed
-Failed to uninstall package ...
-Installation may result in an incomplete environment
-missing RECORD file
-```
-
-**解决方案：**
-
-1. 点击软件页面最左边的“高级”
-2. 向下滚动至故障排除
-3. 选择对应实例
-4. 点击执行清空虚拟环境
-
-### OS error 5 拒绝访问
-
-```text
-OS error 5
-拒绝访问
-Access is denied
-```
-
-**解决方案：**
-
-该问题通常情况下是文件被其他进程占用所致，可尝试以下方法解决：
-
-- 关闭正在占用文件的程序
-- 使用解除占用工具
-- 直接重启电脑
-
-常见的解除占用工具：
-
-- 360、火绒等安全软件自带工具
-- PowerToys 0.64及以上版本内置的Locksmith
-
-鉴于本项目无法对其他第三方解锁工具的安全性作出保证，故不在此处列举更多相关软件。
-
-## 中国大陆一键加速使用的镜像与服务
-
-当用户在“高级设置 -> 通用”中开启“中国大陆一键加速”后，启动器会忽略手动填写的代理和源设置，并改用以下预设地址：
-
-- npm 镜像源：<https://npmreg.proxy.ustclug.org/>
-- Node.js 下载镜像：<https://mirrors.ustc.edu.cn/node/>
-- PyPI 镜像源：<https://mirrors.ustc.edu.cn/pypi/>
-- `astral-sh/python-build-standalone` 发布镜像：<https://mirrors.ustc.edu.cn/github-release/astral-sh/python-build-standalone/LatestRelease/>
-- `astral-sh/uv` 发布镜像：<https://mirrors.ustc.edu.cn/github-release/astral-sh/uv/LatestRelease/>
-- AstrBot Release 下载加速代理： <https://gh-proxy.com>
-
-感谢上述镜像与服务的维护者持续向公众提供可用的基础设施与网络服务，为开源软件分发、依赖安装和版本获取带来了切实帮助。
-
-> [!note]
-> 如果相关镜像源或服务的维护者认为本项目不应内置上述某个地址，请提出Issue并明确说明诉求，我们会及时进行处理。
+- 前端是纯静态产物（`pnpm build` 生成的 `dist/`），用任意 Web 服务器托管即可。
+- 后端是一个常驻进程，把所有原 Tauri command 注册成 HTTP 路由：
+  - `POST /api/<command>`：业务命令，参数以 JSON body 传递（如 `create_instance`、`start_instance`、`fetch_releases`）。
+  - `GET /api/events`：SSE 事件流，推送日志与状态变化。
+  - `/api/files/instance/<id>/...`：一组文件管理路由（列表、内容读写、上传分片、压缩解压等）。
+- 后端默认监听 `0.0.0.0:6190`，可用环境变量 `ASTRBOT_HTTP_PORT` 覆盖。
+- 数据目录默认走系统规范路径（Linux 上约 `~/.local/share/astrbot-launcher`）。
 
 ## 技术栈
 
-- 前端: React 19, Vite, Ant Design, TypeScript
-- 后端: Rust + Tauri 2
+- **前端**：React 19 · Vite 7 · Ant Design 6 · TypeScript · Zustand（状态）· react-router（路由）。
+- **后端**：Rust 2021 · axum 0.8（HTTP）· tokio（异步）· reqwest（网络/代理）· redb（状态库）· zip / tar / flate2（归档）· walkdir（遍历）。
+- **已剥离的部分**：Tauri 运行时、桌面窗口、系统托盘、macOS 专属分支、应用自更新、开机自启 Tauri 插件。这些桌面能力要么被删除，要么改为 systemd / 纯前端（localStorage）实现。
 
-## 安全性说明
+## 构建
 
-本项目所有源代码公开，内嵌二进制文件ctrlc_sender.exe源码托管于<https://codeberg.org/Raven95676/ctrlc_sender>
+需要：Node.js 18+、pnpm、Rust 工具链（含 `cargo`）、系统库 `libssl-dev` / `pkg-config` / `build-essential`（Linux）。
+
+```bash
+# 前端
+pnpm install
+pnpm build                 # 产物输出到 dist/
+
+# 后端（在 src-tauri 下）
+cd src-tauri
+cargo build --release      # 产物为 target/release/astrbot_launcher
+```
+
+本地联调时，`vite.config.ts` 已把 `/api` 代理到 `localhost:6190`（可用 `ASTRBOT_BACKEND_HOST` 指向远端后端）；前端 dev server 端口 `1420`。
+
+## 部署（Linux 服务器）
+
+`deploy/` 目录提供三种部署辅助：
+
+- `setup_vm.sh`：**源码编译安装**——在目标机装 Rust 工具链并 `cargo build --release`，适合需要自定义后端或参与开发。
+- `install_debian.sh`：**Debian/Ubuntu 一键安装（推荐生产环境）**——从 GitHub Release 下载**预编译好的 zip**（含后端二进制 + 前端 `dist` + systemd 单元），解压即装、免编译，适合干净的 Debian 系服务器。
+- `astrbot-launcher.service`：systemd 单元文件（被上面两个脚本使用）。
+- `package_release.sh`：本地打包脚本，把编译产物打成 Release 用的 zip。
+
+预编译安装典型流程（详见 `install_debian.sh` 顶部注释）：
+
+```bash
+# 在 Debian/Ubuntu 服务器上，以 root 执行：
+RELEASE_URL=https://github.com/ssc2991lyh/AstrBot_WebManager/releases/download/v0.1.0/astrbot-web-manager-linux-x64.zip \
+  sudo -E bash -c 'curl -fsSL https://raw.githubusercontent.com/ssc2991lyh/AstrBot_WebManager/main/deploy/install_debian.sh | bash'
+```
+
+后端以 systemd 服务常驻，单元名 `astrbot-launcher.service`，二进制位于 `/usr/local/bin/astrbot-launcher`，监听 `:6190`，崩溃后由 `Restart=on-failure` 自动拉起。「开机自启面板」「重启 / 停止 Manager」等操作也通过 systemd 完成（对应 `set_systemd_enabled` / `restart_manager` / `stop_manager` 命令）。
+
+nginx 反代示例：
+
+```nginx
+server {
+    listen 80;
+    root /var/www/astrbot-web/dist;
+    index index.html;
+
+    # 单页应用回退
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 业务 API 与 SSE 事件流转发到 Rust 后端
+    location /api/ {
+        proxy_pass http://127.0.0.1:6190;
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;   # SSE 日志流需要较长超时
+    }
+}
+```
+
+## 关于「中国大陆一键加速」与镜像
+
+高级设置里开启「中国大陆一键加速」后，后端会忽略手动填写的代理和源，改用以下预设地址（这些镜像由社区维护，本项目仅内置其 URL）：
+
+- npm 镜像：<https://npmreg.proxy.ustclug.org/>
+- Node.js 下载：<https://mirrors.ustc.edu.cn/node/>
+- PyPI 镜像：<https://mirrors.ustc.edu.cn/pypi/>
+- python-build-standalone 发布：<https://mirrors.ustc.edu.cn/github-release/astral-sh/python-build-standalone/LatestRelease/>
+- uv 发布：<https://mirrors.ustc.edu.cn/github-release/astral-sh/uv/LatestRelease/>
+- AstrBot Release 加速代理：<https://gh-proxy.com>
+
+如果某镜像的维护者不希望被内置，提出 Issue 说明即可，我们会及时处理。感谢这些基础设施的维护者。
+
+## 已知限制 / 与官方版的差异
+
+- **离线下载**未移植（文件管理其余功能均已迁移）。
+- macOS 专属代码分支已移除，本项目以 **Linux 服务器部署**为主要场景。
+- 桌面专属能力（系统托盘、窗口状态记忆、应用自身更新、双击打开文件夹等）在本网页版中不存在或改为等效的 Web / systemd 实现。
+- 后端目前未做鉴权中间件；若暴露到公网，请在反向代理层自行加认证 / 访问控制。
 
 ## 附注
 
-如果本项目对您的生活/工作产生帮助，请给项目一个 Star ❤️
+如果本项目对你的部署有帮助，欢迎到仓库点个 Star ❤️。问题、建议或镜像移除请求，请走 GitHub Issue。

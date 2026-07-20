@@ -2,6 +2,7 @@ mod archive;
 mod backup;
 mod commands;
 mod component;
+mod file_manager;
 mod config;
 mod download;
 mod error;
@@ -122,6 +123,57 @@ fn build_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/api/events", get(sse_handler))
         .route("/api/{cmd}", post(api_handler))
+        // --- file manager (instance core/ directory) ---
+        .route(
+            "/api/files/instance/{id}/lists",
+            get(file_manager::file_lists),
+        )
+        .route(
+            "/api/files/instance/{id}/content",
+            get(file_manager::file_content_get).post(file_manager::file_content_post),
+        )
+        .route(
+            "/api/files/instance/{id}/directory",
+            post(file_manager::file_mkdir),
+        )
+        .route(
+            "/api/files/instance/{id}/rename",
+            post(file_manager::file_rename),
+        )
+        .route(
+            "/api/files/instance/{id}/delete",
+            post(file_manager::file_delete),
+        )
+        .route("/api/files/instance/{id}/copy", post(file_manager::file_copy))
+        .route("/api/files/instance/{id}/move", post(file_manager::file_move))
+        .route(
+            "/api/files/instance/{id}/chmod",
+            post(file_manager::file_chmod),
+        )
+        .route(
+            "/api/files/instance/{id}/download",
+            get(file_manager::file_download),
+        )
+        .route(
+            "/api/files/instance/{id}/upload/init",
+            post(file_manager::upload_init),
+        )
+        .route(
+            "/api/files/instance/{id}/upload/chunk/{upload_id}",
+            post(file_manager::upload_chunk),
+        )
+        .route(
+            "/api/files/instance/{id}/upload/finish/{upload_id}",
+            post(file_manager::upload_finish),
+        )
+        .route(
+            "/api/files/instance/{id}/compress",
+            post(file_manager::file_compress),
+        )
+        .route(
+            "/api/files/instance/{id}/decompress",
+            post(file_manager::file_decompress),
+        )
         .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(state)
 }
