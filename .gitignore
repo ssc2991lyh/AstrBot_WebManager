@@ -16,6 +16,9 @@ package-lock.json
 # Rust build artifacts
 **/target/
 
+# Release artifact (published to GitHub Releases, not committed to repo)
+astrbot-web-manager-linux-x64.zip
+
 # Environment / secrets
 .env
 

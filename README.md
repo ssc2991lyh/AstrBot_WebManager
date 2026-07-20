@@ -66,7 +66,7 @@ pnpm build                 # 产物输出到 dist/
 
 # 后端（在 src-tauri 下）
 cd src-tauri
-cargo build --release      # 产物为 target/release/astrbot_launcher
+cargo build --release      # 产物为 target/release/astrbot-launcher
 ```
 
 本地联调时，`vite.config.ts` 已把 `/api` 代理到 `localhost:6190`（可用 `ASTRBOT_BACKEND_HOST` 指向远端后端）；前端 dev server 端口 `1420`。

@@ -1,6 +1,6 @@
 [package]
 name = "astrbot-launcher"
-version = "0.3.9"
+version = "0.1.0"
 description = "AstrBot instance manager (headless HTTP mode)"
 authors = ["Raven95676 <raven95676@gmail.com>"]
 edition = "2021"
